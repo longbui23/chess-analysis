@@ -1,0 +1,277 @@
+---
+title: "Take-home Final Exam"
+subtitle: "Data 180, Professor Bilen"
+author: 
+  name: "Long Bui"
+  email: "builo@dickinson.edu"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: 
+  html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+**Instructions** Due date is December 12, 5pm. You are allowed to use any of your notes, textbook, or resources from the internet, but you are strictly prohibited to communicate with any other person (including me!) while you complete your final exam. Make sure to interpret your results clearly when indicated. Your score will be 80% based on the accuracy of your code, and 20% interpretation. Good luck! (Note: you are allowed to reach out to me for any clarification questions.)
+
+
+```{r echo=FALSE}
+# Load tidyverse
+library(tidyverse)
+
+# Custom options for knitting, you can keep this as it is.
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  fig.align = "center",
+  fig.width = 4,
+  fig.height = 4,
+  cache = FALSE
+) 
+
+# turn off scientific notation
+options(scipen=5)
+```
+
+Chess is a two-player sequential game where each player gets a set of 16 chess pieces: King (1), Queen (1), Knights (2), Bishops (2), Rooks (2), and Pawns (8). One player takes the White pieces and the other player takes the Black pieces. Player with the White pieces moves first. The goal of the game is to capture the enemy King by a “checkmate”. During the game, players must do their best to play the “correct” moves that would help them achieve this goal.
+
+The data set `chess.csv` is available on Github course page. This file contains data on 328 chess games played at professional tournaments between 2018-2019. 
+
+```
+Game_id:    A unique identifier for each game.
+Ply:        Move number.
+Side:       Player’s side (White or Black).
+Move:       Move played (algebraic notation).
+CPLoss:     Centipawn loss resulting from a move.
+Mistake:	=1 if 120≤ CPLoss <300
+Blunder:	=1 if CPLoss ≥300
+Castle:     =1 if the move played was a "castling" move (short or long).
+LongCastle: =1 if the move played was a "long castling" move.
+NotCastled: =1 if the player did not castle in the game.
+White:	    Name of the player with the White pieces.
+Black:	    Name of the player with the Black pieces.
+WhiteElo:	Elo rating of the player with the White pieces.
+BlackElo:	Elo rating of the player with the Black pieces.
+Result:	    Result of the game: {0: Black won, 1/2: Draw, 1: White won}
+Event:	    Name of the tournament.
+Blitz:	    =1 if the time control used in the tournament was "Blitz", i.e., 5 mins + 2s increments for each player in a game;  otherwise classical time controls (>100 mins each side)  
+Site:		Location of the tournament.
+Date:		Date of the tournament.
+Round:	    The round the game took place in the tournament.
+ECO:		ECO classification of the opening played in the game.
+King:		=1 if a move played is a King move.
+Queen:	    =1 if a move played is a Queen move.
+Bishop:	    =1 if a move played is a Bishop move.
+Knight:	    =1 if a move played is a Knight move.
+Rook:		=1 if a move played is a Rook move.
+Pawn:		=1 if a move played is a Pawn move.
+```
+
+Read this table into R and create the object chess using
+
+```{r}
+chess<-read.csv("chess.csv",header=T,row.names=1) # try full path to file if you get a file missing error
+chess %>% head(6)
+```
+
+In a chess game, the side who plays more “accurately” throughout the game is more likely to become the winner. The variable CPLoss measures the mistakes resulting from a move, with their amounts measured in “centipawns”. (100 centipawns = 1 pawn) The measurements were done with the help of Stockfish 13. Stockfish is a modern “super-computer” chess engine that plays chess stronger than any human player who ever lived.
+
+A popular metric that describes how well a player played in a game is called the "Average Centipawn Loss" (ACPL). For a given player, it is defined as
+
+$$
+ACPL=\overline{CPL} = \frac{\sum_{i=1}^nCentipawn\,Loss_i }{n}
+$$
+
+where *n* is the number of moves played by a given player in a given game. A higher number for ACPL would mean that the player committed more mistakes, on average, in that particular game. 
+
+# Question 1
+Calculate the ACPL for each side in each game in the data. Store this information in a new column named `ACPL`.
+```{r}
+chess <- chess %>% group_by(Game_id, Side) %>% mutate(ACPL = sum(CPLoss)/ n())
+chess
+```
+
+
+# Question 2
+Do we really observe that playing less accurately leads to a higher chance to lose a game? Run a linear probability regression where your X variable is `ACPL` and Y variable is `Win`. Interpret your coefficient and explain your result in plain words. *(Hint: Make sure to consider only decisive games when evaluating the variable `Win`, i.e., think about what Win=0 implies in terms of game outcome.)*
+```{r}
+lm(Win ~ ACPL, data = chess)
+```
+For every unit increase in ACPL, the Win variable is expected to increase by 0.001762 units. This indicates a positive relationship between the two variables, meaning that players with higher ACPL values are more likely to win the game.
+
+# Question 3
+Plot a histogram for `ACPL`. Is it skewed? Why do you think the distribution appears the way it does?
+```{r}
+chess %>% ggplot(aes(x = ACPL)) + geom_histogram()
+```
+The distribution skewed to the right.I believe the distribution appears the way it does because each players want to take the best possible and less risky move in each turn and therefore, the graph is skewed to the right.  
+
+
+# Question 4
+In "Blitz" chess, players get a significantly smaller amount of time to think per move. Does having less time per move lead to players making more mistakes? Test this hypothesis using a simple linear regression. Interpret your result with plain words.
+```{r}
+lm(ACPL ~ Blitz, data = chess)
+```
+The positive correlational pattern between Blitz and ACPL indicates that the less time per move leads to players making more mistakes.
+
+Elo rating is the official ranking system used by the International Chess Federation (FIDE). This system was developed by the Hungarian physicist Arpad Elo (Elo, 1978). It is an approximation for a chess player’s strength before a game takes place.
+
+# Question 5
+Do stronger players play more accurately? Test this hypothesis using a simple linear regression separately for "classical" and "blitz" time-variants. Plot a scatterplot (one for each time-variant) of `ACPL` on the y-axis and Elo rating on the x-axis for all players in the sample. Explain your results in plain words. What do your findings imply? *(Hint: This task requires some data-wrangling. Notice there is no single "Elo" variable at the current state of the data. You need to create a single Elo rating column, which means you need to create a "longer" version of the data. `rbind()` is a function that can come in handy, which is used to append two dataframes together.)*
+
+```{r}
+chess <- chess %>% mutate(Elo = ifelse(Side == 'W', WhiteElo, BlackElo))
+chess_blitz <- chess %>% filter(Blitz == 1)
+chess_blitz
+chess_classical <- chess %>% filter(Blitz == 0)
+chess_classical
+
+lm(ACPL ~ Elo, data = chess_blitz)
+lm(ACPL ~ Elo, data = chess_classical)
+
+plot(x = chess_blitz$Elo, y = chess_blitz$ACPL, xlab = 'Elo', ylab = 'ACPL', cex = 1.2)
+plot(x = chess_classical$Elo, y = chess_classical$ACPL, xlab = 'Elo', ylab = 'ACPL', cex = 1.2)
+```
+
+The finding shows that experienced players tend to use blitz game and they also have lower ACPL in Blitz games compared to lower elo players.
+
+# Question 6
+Predict the expected `ACPL` of a player with Elo rating of 2700 using a linear regression. Restrict your sample to classical games only. Interpret your results. *(Hint: You should use your dataframe from Question 5, where there is only one Elo rating column, and you have a "longer" version of the data at hand.)*
+
+```{r}
+library(stats)
+chess_classical_lr <- chess %>% filter(Blitz == 0)
+
+model <-lm(ACPL~Elo,data = chess_classical_lr)
+
+predicted_acpl <- predict(model, newdata = data.frame(Elo = 2700))
+
+predicted_acpl
+```
+Predicted ACPL for a player with ELO of 2700 would be 15.955 and compared to the graph in quesion 5, the more elo a person has, the less ACPL he/she commits when using blitz strategy. 
+
+# Question 7
+Predict the expected `ACPL` of a player with Elo rating of 2700 using a decision tree. Restrict your sample to classical games only. Are your results different than in Question 6? Explain.
+
+```{r}
+library(rpart)
+
+chess_classical_dc <- chess %>% filter(Blitz==0)
+
+model_dtree <- tree(ACPL ~ Elo, data = chess_classical_dc)
+predicted_acpl_dtree <- predict(model_dtree, newdata = data.frame(Elo = 2700))
+
+predicted_acpl_dtree
+```
+The result in question 7 is different than the result in question 6 because linear regression assumes that the relationship between predictors and response variables corresponds linearly while decision tree models apply paritioning data into different clusters.Therefore, the decision tree model can formulate more complex relationships between the predictor and response variables.
+
+
+# Question 8
+Split your sample to training and test samples. Keep 80% of your data in the training sample, the remaining in the test sample. Make sure to keep only classical games. Train a linear regression model, and a decision tree using your training sample. Then test your model by making predictions of `ACPL` using Elo ratings on the test sample. What is the Mean Squared Error (MSE) of the linear model? What is the MSE of the decision tree? Which model do you prefer. Why? 
+```{r}
+
+chess_classical <- chess %>% filter(Blitz==0)
+trainingloc <- sample(1:nrow(chess_classical), 0.8 * nrow(chess_classical))
+training <- chess_classical[trainingloc, ]
+
+testloc <- setdiff(1:nrow(chess_classical), trainingloc)
+test <- chess_classical[testloc, ]
+
+#model
+lm_model <- lm(ACPL ~ Elo, data = training)
+dt_model <- tree(log(ACPL) ~ Elo, data = training)
+
+#predict in test sample
+lm_preds <- lm_model$coefficients[1]+lm_model$coefficients[2] * test$Elo
+dt_preds <- dt_model$coefficients[1]+dt_model$coefficients[2] * test$Elo
+
+#MSE
+lm_mse <- sum((test$ACPL - lm_preds)^2) / nrow(test)
+dt_mse <- sum((test$ACPL - dt_preds)^2) / nrow(test)
+
+lm_mse
+dt_mse
+```
+
+I prefer the decision tree because as MSE smaller, it is more efficient.
+
+# Question 9
+Each chess opening gets an ECO classification. (ECO stands for "Encyclopedia of Chess Openings", which is a classification system used in chess that categorizes chess openings) What are the names of the three most popular chess openings played in the sample?
+*Hint: You can go to (https://www.chessgames.com/chessecohelp.html)[https://www.chessgames.com/chessecohelp.html] for a list of ECO codes and their corresponding opening names.*
+
+```{r}
+chess %>% group_by(ECO) %>% summarise(count=n()) %>% arrange(desc(count))
+```
+The top 3 opennings: Queen's Gambit Declined, Giuocco Piano, Ruy lOPEZ
+
+# Question 10
+"Sicilian" opening is a popular opening choice (not the only one) for players who want to have a "sharper" game. That is, we can expect more "ups and downs" in computer evaluation (CPLoss) in games with the Sicilian opening. Test if this hypothesis is true using a simple linear regression.
+
+*Hint1: Go to (https://www.chessgames.com/chessecohelp.html)[https://www.chessgames.com/chessecohelp.html] and identify the opening ECO codes for the Sicilian opening. Get all the variations of the Sicilian opening that starts with the letter code "B".*
+
+*Hint2: Here is R code that will come in handy in this problem:*
+```{r}
+chess <- chess %>% mutate(ECOletter = str_sub(ECO,0,1), ECOdigit = str_sub(ECO,-2))
+chess <- chess %>% group_by(Game_id,Side) %>% mutate(CPLsd = sd(CPLoss))
+``` 
+
+```{r}
+chess_Sicilian <- chess %>% mutate(Sicilian = ifelse(ECOletter=="B" & 20 < ECOdigit & ECOdigit< 99,1,0))
+
+model_Sicilian <- lm(CPLsd~Sicilian , data=chess_Sicilian)
+
+model_Sicilian
+```
+
+
+# Question 11
+Let’s do some basic move-level analysis. Can you identify around what move # the mistakes happen the most? Consider only the first 80 moves.
+*(Hint: You should compute the average `CPLoss` for each `Ply`.)*
+
+```{r}
+chess_move_level <- chess %>% filter(Ply <= 80) %>% group_by(Ply) %>% summarise(mean_CPLoss = mean(CPLoss)) %>% arrange(desc(mean_CPLoss))
+
+chess_move_level
+```
+
+
+"Castling" is a move where a player puts their King in a safe position, thus can start building an attack without worrying for their King’s safety. (at least in the short run) However, some players may consider delaying castling (or not castle altogether) in order to achieve a quick "surprise" attack. 
+
+# Question 12
+Considering all of this, should you castle? Compare the means of win rate between players who did and who did not castle during a game.
+```{r}
+castled_games <- chess %>% filter(Castle == 1)
+not_castled_games <- chess %>% filter(NotCastled == 1)
+
+# Calculate the win rate for each group
+castled_win_rate <- sum(castled_games$Result == 1) / nrow(castled_games)
+castled_games
+not_castled_win_rate <- sum(not_castled_games$Result == 1) / nrow(not_castled_games)
+
+# Compare the means of the win rates for the two groups
+castled_win_rate - not_castled_win_rate
+```
+  Yes, the player should use castle move since it is positive but the number is too small so there is no drastical difference exists whether player decide to apply blitz strategy in their game or not.   
+
+# Question 13
+If your answer to the previous is yes, *when* should you castle? *(Hint: In other words, what move # for castling over all castling moves played gives the highest win rate?)*
+```{r}
+#CASTLE
+#count total castling moves play
+castle_move <- chess%>% filter(Castle == 1) %>% group_by(Ply,Game_id) %>% summarise(move = n())
+castle_move_tot <- castle_move %>% group_by(Ply) %>% summarise(Castle_move_game = n()) 
+
+#count total castling moves played and WIN
+castle_move_win <- chess %>% filter(Castle == 1 & Win == 1 ) %>% group_by(Ply, Game_id) %>% summarize ( move = n())
+castle_move_win_tot <- castle_move_win%>% group_by(Ply) %>% summarise(Castle_move_win = n())
+
+Castle_move_tot <- merge(castle_move_tot, castle_move_win_tot, by= 'Ply', all = TRUE )
+Castle_move_tot[is.na(Castle_move_tot)] = 0
+Castle_move_tot <- data.frame(Castle_move_tot %>% mutate(Castle_move_win_rate = Castle_move_win/Castle_move_game))
+Castle_move_tot %>% arrange(desc(Castle_move_win_rate))
+```
+The data frame above demonstrates that castle starting move have the highest win_rate is move 16th.
+
+Congratulations! You are done! 🏁 Don't forget to commit and push your .Rmd file to your Github repository before the due date. It has been a pleasure teaching you data science this semester! Follow me on Github, and keep in touch!
+
+
